@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Task Tracker</title>
+  <script>
+    // Применяем сохранённую тему до отрисовки страницы, чтобы не было «вспышки»
+    try {
+      var savedTheme = JSON.parse(localStorage.getItem('taskTracker.v1')).settings.theme;
+      if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
+    } catch (e) { /* данных ещё нет — тема как в системе */ }
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="container app-header__inner">
+      <div>
+        <h1 class="app-title">Task Tracker</h1>
+        <p class="app-subtitle" id="task-counter"></p>
+      </div>
+      <div class="app-header__actions">
+        <button type="button" class="btn btn--icon" id="settings-btn" aria-label="Настройки" title="Настройки">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <button type="button" class="btn btn--primary" id="add-task-btn">+ Новая задача</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container app-main">
+    <div id="notice" class="notice" role="status" hidden></div>
+
+    <!-- Поиск, вид, фильтры, сортировка -->
+    <section class="toolbar" aria-label="Поиск и фильтры">
+      <div class="toolbar__row">
+        <input type="search" class="input toolbar__search" id="search-input" placeholder="Поиск по задачам" aria-label="Поиск по названию и описанию" autocomplete="off">
+        <div class="view-switch" role="group" aria-label="Вид">
+          <button type="button" class="view-switch__btn" data-view="list" aria-pressed="true">Список</button>
+          <button type="button" class="view-switch__btn" data-view="board" aria-pressed="false">Доска</button>
+        </div>
+      </div>
+      <div class="toolbar__filters">
+        <select class="input" id="filter-direction" aria-label="Фильтр по направлению"></select>
+        <select class="input" id="filter-project" aria-label="Фильтр по проекту"></select>
+        <select class="input" id="filter-priority" aria-label="Фильтр по приоритету"></select>
+        <select class="input" id="filter-status" aria-label="Фильтр по статусу"></select>
+        <select class="input toolbar__sort" id="sort-select" aria-label="Сортировка"></select>
+      </div>
+      <div class="toolbar__summary" id="filter-summary-row" hidden>
+        <span id="filter-summary"></span>
+        <button type="button" class="btn btn--small" id="reset-filters-btn">Сбросить фильтры</button>
+      </div>
+    </section>
+
+    <section id="empty-state" class="empty" hidden>
+      <p class="empty__title" id="empty-title">Задач пока нет</p>
+      <p id="empty-text">Нажмите «+ Новая задача», чтобы добавить первую.</p>
+      <button type="button" class="btn btn--small empty__btn" id="empty-reset-btn" hidden>Сбросить фильтры</button>
+    </section>
+
+    <ul id="task-list" class="task-list"></ul>
+    <div id="task-board" class="board" hidden></div>
+  </main>
+
+  <!-- Окно создания и редактирования задачи -->
+  <dialog id="task-dialog" class="dialog" aria-labelledby="dialog-title">
+    <form id="task-form" class="form">
+      <h2 id="dialog-title">Новая задача</h2>
+
+      <label class="field">
+        <span class="field__label">Название *</span>
+        <input class="input" id="field-title" type="text" required maxlength="200" autocomplete="off">
+      </label>
+
+      <label class="field">
+        <span class="field__label">Описание</span>
+        <textarea class="input" id="field-description" rows="4" maxlength="5000"></textarea>
+      </label>
+
+      <div class="form__grid">
+        <label class="field">
+          <span class="field__label">Срок</span>
+          <input class="input" id="field-due-date" type="date">
+        </label>
+
+        <label class="field">
+          <span class="field__label">Приоритет</span>
+          <select class="input" id="field-priority"></select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Статус</span>
+          <select class="input" id="field-status"></select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Проект</span>
+          <select class="input" id="field-project"></select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Направление</span>
+          <select class="input" id="field-direction"></select>
+        </label>
+      </div>
+
+      <div class="form__actions">
+        <button type="button" class="btn btn--danger" id="delete-task-btn">Удалить</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="cancel-btn">Отмена</button>
+        <button type="submit" class="btn btn--primary">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Окно настроек -->
+  <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title">
+    <div class="form">
+      <div class="dialog__header">
+        <h2 id="settings-title">Настройки</h2>
+        <button type="button" class="btn btn--small" id="settings-close-btn">Закрыть</button>
+      </div>
+
+      <div id="settings-message" class="notice" role="status" hidden></div>
+
+      <section class="settings-section">
+        <h3 class="settings-section__title">Направления</h3>
+        <p class="hint">Процессы, к которым относятся задачи: продажи, маркетинг, финансы… Чтобы переименовать, щёлкните по названию и измените текст.</p>
+        <ul class="settings-list" id="directions-list"></ul>
+        <form class="settings-add" data-kind="directions">
+          <input class="input" type="text" maxlength="60" placeholder="Новое направление" aria-label="Название нового направления">
+          <button type="submit" class="btn">Добавить</button>
+        </form>
+      </section>
+
+      <section class="settings-section">
+        <h3 class="settings-section__title">Проекты</h3>
+        <p class="hint">Проекты, в рамках которых вы ведёте задачи.</p>
+        <ul class="settings-list" id="projects-list"></ul>
+        <form class="settings-add" data-kind="projects">
+          <input class="input" type="text" maxlength="60" placeholder="Новый проект" aria-label="Название нового проекта">
+          <button type="submit" class="btn">Добавить</button>
+        </form>
+      </section>
+
+      <section class="settings-section">
+        <h3 class="settings-section__title">Оформление</h3>
+        <label class="field">
+          <span class="field__label">Тема</span>
+          <select class="input" id="theme-select"></select>
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h3 class="settings-section__title">Резервная копия</h3>
+        <p class="hint">Задачи хранятся только в этом браузере. Время от времени скачивайте копию: из неё можно восстановить задачи или перенести их на другое устройство.</p>
+        <div class="settings-buttons">
+          <button type="button" class="btn" id="export-btn">Скачать резервную копию</button>
+          <button type="button" class="btn" id="import-btn">Загрузить из файла</button>
+          <input type="file" id="import-input" accept=".json,application/json" hidden>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
